@@ -45,9 +45,12 @@ Blender 5.2 で、プロジェクト直下から実行します。`public/models
 | `src/render/` | three.js による描画（`.glb` の読み込み、群衆、町並み） |
 | `src/audio.ts` | 鳴物と環境音（WebAudio で合成。音声ファイルなし） |
 | `src/share.ts` | X の投稿画面の URL（API は使わない） |
+| `blender/overlay_caption.py` | 画像に宣伝用の文字を重ねる（`tl`／`tr` で位置を指定） |
 | `blender/render_promo.py` | X 宣伝用の画像 `promo/x-post.png`（1200×675）のレンダリング |
 
-外部の画像・3D・音の素材は使っていません。OGP 画像の題字は BIZ UD明朝（SIL Open Font License）でレンダリングしています。
+外部の画像・3D・音の素材は使っていません。
+
+`promo/x-post-ai.png` の絵は **AI生成（Codex の内蔵画像生成、2026-10-12）** です。依頼文は `promo/codex/prompt.md`、採用した原画は `promo/codex/codex-2.png`。文字は `blender/overlay_caption.py` で重ねています。ゲーム本体には使っていません。OGP 画像の題字は BIZ UD明朝（SIL Open Font License）でレンダリングしています。
 
 ## ライセンス
 

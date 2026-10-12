@@ -1,0 +1,6 @@
+# 生成物のうち採用した codex-2.png だけを管理する（ほかの案と実行ログは手元に残す）
+*.png
+!codex-2.png
+*.log
+step*.md
+result.md
