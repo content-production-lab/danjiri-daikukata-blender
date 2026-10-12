@@ -84,7 +84,8 @@ Blender: 5.2.2 LTS（`C:\Program Files\Blender Foundation\Blender 5.2\blender.ex
 
 ### 5.3 X 投稿
 
-- 宮入り後の結果画面に「X にポスト」ボタン。X の投稿画面（`https://x.com/intent/post`）を開き、タイム・スコア・総合ランク・URL・`#だんじり大工方` を入れる。API は使わない。
+- 結果画面に「X にポスト」ボタン。X の投稿画面（`https://x.com/intent/post`）を開き、タイム・スコア・総合ランク・URL・`#だんじり大工方` を入れる。API は使わない。
+- 失敗（転落・横転・曳行中止）でもボタンを出す。文面は失敗用で、失敗の種類と理由、曲がり終えた角の数（例: 2/5 の角まで）を入れる（2026-10-12 追加）。
 - リンクのカード表示用に OGP（`og:image` 1200×630、`twitter:card` = `summary_large_image`）を付ける。
 
 ### 5.4 操作表示とスマホ

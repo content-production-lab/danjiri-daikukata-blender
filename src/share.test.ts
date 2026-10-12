@@ -17,6 +17,22 @@ describe('X 投稿', () => {
     expect(t).toContain('#だんじり大工方');
   });
 
+  it('失敗のときは失敗の種類・理由・進んだ角の数が入る', () => {
+    const t = shareText({
+      time: 45.2,
+      score: 1234,
+      rank: { letter: 'D', name: '出直し' },
+      failure: { kind: 'fall', detail: '右へ振られて屋根から落ちた', corners: 2, totalCorners: 5 },
+    });
+    expect(t).toContain('転落…（右へ振られて屋根から落ちた）');
+    expect(t).toContain('2/5 の角まで');
+    expect(t).toContain('0:45.2');
+    expect(t).toContain('D「出直し」');
+    expect(t).not.toContain('宮入り');
+    const w = shareText({ ...r, failure: { kind: 'wrecked', detail: '', corners: 0, totalCorners: 5 } });
+    expect(w.split('\n')[0]).toBe('だんじり大工方で曳行中止…');
+  });
+
   it('X の投稿画面の URL に文と URL がエンコードされて入る', () => {
     const u = new URL(xIntentUrl(r));
     expect(u.origin + u.pathname).toBe('https://x.com/intent/post');

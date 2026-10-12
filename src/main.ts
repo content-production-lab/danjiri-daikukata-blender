@@ -569,8 +569,15 @@ function showResult(reason: EndReason) {
   if (!g.results.length) cell(tb.insertRow(), 'やりまわしの記録なし');
 
   const share = $<HTMLAnchorElement>('share-x');
-  share.hidden = reason !== 'goal';
-  share.href = xIntentUrl({ time: g.time, score: g.score, rank });
+  share.href = xIntentUrl({
+    time: g.time,
+    score: g.score,
+    rank,
+    failure:
+      reason === 'goal'
+        ? undefined
+        : { kind: reason, detail: reason === 'fall' ? g.rider.fallReason : '', corners: g.results.length, totalCorners: g.course.corners.length },
+  });
 
   $('hud').hidden = true;
   $('controls').hidden = true;
@@ -680,7 +687,7 @@ loadModels(lowSpec, (r) => (startBtn.textContent = `読み込み中… ${Math.ro
     assemble(m, game);
     syncScene(0);
     startBtn.disabled = false;
-    startBtn.textContent = '曳行開始';
+    startBtn.textContent = 'スタート';
   })
   .catch((err: unknown) => {
     console.error(err);
