@@ -1,0 +1,142 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+    <title>だんじり 大工方</title>
+    <meta name="description" content="地車（だんじり）の大屋根に立つ大工方になって、団扇の合図でやりまわしを決める3Dブラウザゲーム。スマホでも遊べます。" />
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="だんじり 大工方" />
+    <meta property="og:description" content="四トンの地車を、速さを落とさず町の角で直角に。大屋根の上から、やりまわしを決めろ。" />
+    <meta property="og:url" content="https://content-production-lab.github.io/danjiri-daikukata-blender/" />
+    <meta property="og:image" content="https://content-production-lab.github.io/danjiri-daikukata-blender/og.png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:locale" content="ja_JP" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="だんじり 大工方" />
+    <meta name="twitter:image" content="https://content-production-lab.github.io/danjiri-daikukata-blender/og.png" />
+    <meta name="theme-color" content="#14213f" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Zen+Old+Mincho:wght@700;900&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="./src/style.css" />
+  </head>
+  <body>
+    <div id="view"></div>
+
+    <div id="hud" hidden>
+      <div class="hud-tl">
+        <div class="stat"><span class="k">時間</span><span id="h-time" class="v">0.0</span></div>
+        <div class="stat"><span class="k">得点</span><span id="h-score" class="v">0</span></div>
+        <div class="stat small"><span class="k">連続</span><span id="h-streak" class="v">0</span></div>
+        <div class="bar-wrap"><span class="k">傷み</span><div class="bar"><i id="h-damage"></i></div></div>
+      </div>
+      <div class="hud-tr">
+        <canvas id="minimap" width="170" height="170" aria-label="コース図"></canvas>
+        <div class="tr-buttons">
+          <button id="mute" type="button" aria-label="音を消す">🔊</button>
+          <button id="pause-btn" type="button" aria-label="一時停止">⏸</button>
+        </div>
+      </div>
+      <div id="callout"></div>
+      <div id="popup"></div>
+      <div id="score-pop"></div>
+      <div id="lift">片輪が浮いた！</div>
+
+      <div class="hud-bc">
+        <div class="speed"><span id="h-speed">0</span><small>km/h</small></div>
+        <div class="bar-wrap"><span class="k">綱</span><div class="bar"><i id="h-rope"></i></div></div>
+        <div class="bar-wrap"><span class="k">梃子</span><div class="teko"><i id="h-teko"></i></div></div>
+        <div class="bar-wrap"><span class="k">重心</span><div class="balance"><i id="h-lat"></i><b id="h-lean"></b></div></div>
+        <div class="balance thin"><i id="h-lon"></i></div>
+        <div class="k center" id="h-order">流せ</div>
+      </div>
+    </div>
+
+    <!-- 画面端の操作（PC ではキーの案内、スマホではボタン） -->
+    <div id="controls" hidden>
+      <div class="pad left" aria-label="団扇と曳行の合図">
+        <button data-a="steerL"><span>◀ 団扇</span><kbd>A</kbd></button>
+        <button data-a="steerR"><span>団扇 ▶</span><kbd>D</kbd></button>
+        <button data-a="pull" class="pull"><span>曳け</span><kbd>W ↑</kbd></button>
+        <button data-a="brake"><span>止め</span><kbd>S ↓</kbd></button>
+      </div>
+      <div class="pad right" aria-label="大工方の体">
+        <button data-a="leanL"><span>◀ 重心</span><kbd>←</kbd></button>
+        <button data-a="leanR"><span>重心 ▶</span><kbd>→</kbd></button>
+        <button data-a="jump" class="wide jump"><span>跳ぶ</span><kbd>Space</kbd></button>
+      </div>
+    </div>
+
+    <section id="title" class="screen">
+      <div class="card">
+        <p class="kicker">岸和田型 地車曳行</p>
+        <h1>だんじり<br /><span>大工方</span></h1>
+        <p class="lead">
+          地車の大屋根に立つ大工方（だいくがた）になって、団扇の合図で曳き手と梃子方を動かします。四トンの地車を、速さを落とさずに町の角で直角に曲げる「やりまわし」を決めましょう。
+        </p>
+        <table class="keys">
+          <tr><th>曳け・止め</th><td>W/↑・S/↓（左下のボタン）</td></tr>
+          <tr><th>団扇の合図</th><td>A/D：後梃子が後ろを振って曲げる</td></tr>
+          <tr><th>体重移動</th><td>←/→：遠心力に負けないよう内側へ（右下のボタン）</td></tr>
+          <tr><th>跳ぶ</th><td>Space：角の最中に決めれば大技</td></tr>
+          <tr><th>そのほか</th><td>C 視点・M 音・P 一時停止</td></tr>
+        </table>
+        <p class="tip">
+          加点: 角の速さ・無傷・家すれすれの「際」・角での跳び・片輪返し・連続の倍率・タイム。減点: 接触・ドスン・体勢の崩れ・止まりかけ。スマホは横持ちがおすすめです。
+        </p>
+        <div class="assist">
+          <span>体重移動の手助け</span>
+          <label><input type="radio" name="assist" value="0.75" checked /> しっかり</label>
+          <label><input type="radio" name="assist" value="0.4" /> 少し</label>
+          <label><input type="radio" name="assist" value="0" /> なし（本職）</label>
+        </div>
+        <button id="start" class="go" disabled>読み込み中…</button>
+        <p class="note">音が出ます。モデルは Blender で、鳴物はブラウザ内で作っています。</p>
+      </div>
+    </section>
+
+    <section id="result" class="screen" hidden>
+      <div class="card">
+        <p class="kicker" id="r-kicker">結果</p>
+        <div class="rank-row">
+          <div id="r-rank" class="rank">S</div>
+          <div>
+            <h2 id="r-title"></h2>
+            <p id="r-reason" class="lead"></p>
+          </div>
+        </div>
+        <div class="totals">
+          <div><span>スコア</span><b id="r-score">0</b></div>
+          <div><span>タイム</span><b id="r-time">0.0</b></div>
+        </div>
+        <details open>
+          <summary>点数の内訳</summary>
+          <table id="r-breakdown" class="corners"></table>
+        </details>
+        <details>
+          <summary>角ごとの記録</summary>
+          <table id="r-table" class="corners"></table>
+        </details>
+        <div class="row">
+          <a id="share-x" class="go x" href="#" target="_blank" rel="noopener noreferrer">X にポスト</a>
+          <button id="retry" class="go">もう一度</button>
+          <button id="to-title" class="ghost">はじめに戻る</button>
+        </div>
+      </div>
+    </section>
+
+    <section id="pause" class="screen" hidden>
+      <div class="card small">
+        <h2>一時停止</h2>
+        <div class="row">
+          <button id="resume" class="go">つづける</button>
+          <button id="quit" class="ghost">やめる</button>
+        </div>
+      </div>
+    </section>
+
+    <script type="module" src="./src/main.ts"></script>
+  </body>
+</html>
