@@ -45,6 +45,7 @@ Blender 5.2 で、プロジェクト直下から実行します。`public/models
 | `src/render/` | three.js による描画（`.glb` の読み込み、群衆、町並み） |
 | `src/audio.ts` | 鳴物と環境音（WebAudio で合成。音声ファイルなし） |
 | `src/share.ts` | X の投稿画面の URL（API は使わない） |
+| `blender/render_promo.py` | X 宣伝用の画像 `promo/x-post.png`（1200×675）のレンダリング |
 
 外部の画像・3D・音の素材は使っていません。OGP 画像の題字は BIZ UD明朝（SIL Open Font License）でレンダリングしています。
 

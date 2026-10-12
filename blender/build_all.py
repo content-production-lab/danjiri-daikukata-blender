@@ -799,4 +799,5 @@ def main():
         render_og(dj_col, people_col, town_col)
 
 
-main()
+if __name__ == "__main__":
+    main()
