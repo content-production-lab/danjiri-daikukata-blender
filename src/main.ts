@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { Game, type CornerResult, type EndReason, type GameEvent } from './sim/game';
 import { SPEC } from './sim/danjiri';
 import { SCORE_LABELS, type ScoreKey } from './sim/score';
+import { DIFFICULTIES, type Difficulty, type DifficultyId } from './sim/guide';
 import { loadModels, PoseCrowd, type Models } from './render/models';
 import { buildWorld, type World } from './render/world';
 import * as TX from './render/textures';
@@ -53,7 +54,15 @@ let thirdPerson = false;
 let wheelTurn = 0;
 let shake = 0;
 let runPhase = 0;
-let lastAssist = 0.75;
+const DIFF_KEY = 'danjiri-daikukata:difficulty';
+let difficulty: Difficulty = DIFFICULTIES.normal;
+try {
+  const saved = localStorage.getItem(DIFF_KEY) as DifficultyId | null;
+  if (saved && saved in DIFFICULTIES) difficulty = DIFFICULTIES[saved];
+} catch {
+  // 保存できない環境では「ふつう」
+}
+const newGame = (d: Difficulty) => new Game({ assist: d.leanAssist, steerAssist: d.steerAssist, autoBrake: d.autoBrake, damageScale: d.damageScale });
 /** 開発時の検証用: カメラを外から固定する */
 let devCam: { pos: number[]; look: number[] } | null = null;
 
@@ -336,6 +345,7 @@ const el = {
   callout: $('callout'),
   popup: $('popup'),
   scorePop: $('score-pop'),
+  target: $('h-target'),
   lift: $('lift'),
 };
 const balanceEl = el.lat.parentElement as HTMLElement;
@@ -380,6 +390,9 @@ function updateHud(dt: number) {
   el.streak.textContent = g.streak > 1 ? `${g.streak}（×${Math.min(1.5, 1 + 0.1 * g.streak).toFixed(1)}）` : String(g.streak);
   el.damage.style.width = `${Math.min(100, g.damage)}%`;
   el.speed.textContent = Math.max(0, g.kmh).toFixed(0);
+  const gd = g.guide;
+  el.speed.className = gd.speed === 'free' || g.ended ? '' : gd.speed;
+  el.target.textContent = gd.speed === 'free' || g.ended ? '' : `目安 ${Math.round(gd.allowed)}`;
   el.rope.style.width = `${Math.min(100, (Math.max(0, d.ropeForce) / SPEC.ropeForceMax) * 100)}%`;
   const tk = d.tekoForce / SPEC.tekoForceMax;
   el.teko.style.left = tk < 0 ? `${50 + tk * 50}%` : '50%';
@@ -397,7 +410,13 @@ function updateHud(dt: number) {
   if (c && !g.ended) {
     const dist = c.s - g.s;
     const dirTxt = c.dir > 0 ? '右 ▶' : '◀ 左';
-    if (dist < -2) {
+    if (gd.cue === 'now') {
+      el.callout.textContent = c.dir > 0 ? '団扇！ 右へ ▶' : '◀ 左へ 団扇！';
+      el.callout.className = 'hot cue';
+    } else if (gd.cue === 'back') {
+      el.callout.textContent = c.dir > 0 ? '◀ 戻せ！' : '戻せ！ ▶';
+      el.callout.className = 'hot cue back';
+    } else if (dist < -2) {
       el.callout.textContent = `やりまわし！ ${c.name}`;
       el.callout.className = 'hot';
     } else if (dist < 90) {
@@ -415,7 +434,19 @@ function updateHud(dt: number) {
 }
 
 function updateControls() {
-  for (const b of controlButtons) b.classList.toggle('on', input.isActive(b.dataset.a as Action));
+  // 合図のタイミングでは、振るべき向きの団扇ボタンを光らせる
+  let cueBtn: Action | null = null;
+  if (game && !game.ended && $('title').hidden) {
+    const gd = game.guide;
+    const dir = gd.corner?.dir ?? 0;
+    const want = gd.cue === 'now' ? dir : gd.cue === 'back' ? -dir : 0;
+    if (want) cueBtn = want > 0 ? 'steerR' : 'steerL';
+  }
+  for (const b of controlButtons) {
+    const a = b.dataset.a as Action;
+    b.classList.toggle('on', input.isActive(a));
+    b.classList.toggle('cue', a === cueBtn);
+  }
 }
 
 let mmBounds: { minX: number; minY: number; scale: number } | null = null;
@@ -539,7 +570,7 @@ function showResult(reason: EndReason) {
   const g = game;
   const rank = g.rank;
   const [title, text] = REASON[reason];
-  $('r-kicker').textContent = reason === 'goal' ? '宮入り' : '結果';
+  $('r-kicker').textContent = `${reason === 'goal' ? '宮入り' : '結果'} ・ 難易度「${difficulty.name}」`;
   const rankEl = $('r-rank');
   rankEl.textContent = rank.letter;
   rankEl.className = `rank ${rank.letter}`;
@@ -570,6 +601,7 @@ function showResult(reason: EndReason) {
 
   const share = $<HTMLAnchorElement>('share-x');
   share.href = xIntentUrl({
+    difficulty: difficulty.name,
     time: g.time,
     score: g.score,
     rank,
@@ -587,9 +619,14 @@ function showResult(reason: EndReason) {
 // ---------- 画面の切り替え ----------
 function start() {
   if (!models) return;
-  const checked = document.querySelector<HTMLInputElement>('input[name="assist"]:checked');
-  lastAssist = checked ? Number(checked.value) : lastAssist;
-  game = new Game({ assist: lastAssist });
+  const checked = document.querySelector<HTMLInputElement>('input[name="difficulty"]:checked');
+  if (checked && checked.value in DIFFICULTIES) difficulty = DIFFICULTIES[checked.value as DifficultyId];
+  try {
+    localStorage.setItem(DIFF_KEY, difficulty.id);
+  } catch {
+    // 保存できなくても遊べる
+  }
+  game = newGame(difficulty);
   wheelTurn = 0;
   shake = 0;
   mmBounds = null;
@@ -679,11 +716,13 @@ window.addEventListener('resize', resize);
 resize();
 
 const startBtn = $<HTMLButtonElement>('start');
+const savedRadio = document.querySelector<HTMLInputElement>(`input[name="difficulty"][value="${difficulty.id}"]`);
+if (savedRadio) savedRadio.checked = true;
 loadModels(lowSpec, (r) => (startBtn.textContent = `読み込み中… ${Math.round(r * 100)}%`))
   .then((m) => {
     models = m;
     // タイトル画面の背景として、止まった地車を見せる
-    game = new Game({ assist: lastAssist });
+    game = newGame(difficulty);
     assemble(m, game);
     syncScene(0);
     startBtn.disabled = false;

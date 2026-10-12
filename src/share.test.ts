@@ -33,6 +33,10 @@ describe('X 投稿', () => {
     expect(w.split('\n')[0]).toBe('だんじり大工方で曳行中止…');
   });
 
+  it('難易度を添える', () => {
+    expect(shareText({ ...r, difficulty: 'やさしい' }).split('\n')[0]).toBe('だんじり大工方（やさしい）で宮入り！');
+  });
+
   it('X の投稿画面の URL に文と URL がエンコードされて入る', () => {
     const u = new URL(xIntentUrl(r));
     expect(u.origin + u.pathname).toBe('https://x.com/intent/post');

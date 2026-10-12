@@ -3,6 +3,7 @@
 import { Course, MAIN_COURSE, type Corner, type CourseDef, type Vec2 } from './course';
 import { DanjiriSim, SPEC, type DanjiriControls } from './danjiri';
 import { RiderSim, type RoofMotion } from './rider';
+import { autoSteer, guideFor, type Guide } from './guide';
 import {
   ScoreBook,
   hitPenalty,
@@ -53,6 +54,12 @@ export type EndReason = 'goal' | 'fall' | 'overturn' | 'wrecked';
 export interface GameOptions {
   /** 体重移動アシスト（0 = なし、1 = 全自動） */
   assist: number;
+  /** 団扇（後梃子）アシスト（0..1） */
+  steerAssist?: number;
+  /** 角の手前で目安の速さを超えたら自動で減速する */
+  autoBrake?: boolean;
+  /** 傷みの倍率 */
+  damageScale?: number;
   course?: CourseDef;
 }
 
@@ -128,6 +135,11 @@ export class Game {
     return this.course.corners[this.nextCorner] ?? null;
   }
 
+  /** 角の手前の手がかり（合図のタイミング・目安の速さ） */
+  get guide(): Guide {
+    return guideFor(this.upcomingCorner, this.s, this.danjiri);
+  }
+
   /** 実時間 dt ぶん進める（内部は固定刻み） */
   update(dt: number, input: PlayerInput): void {
     this.acc += Math.min(dt, 0.1);
@@ -148,8 +160,18 @@ export class Game {
     const d = this.danjiri;
 
     // 合図: 曳け → 全力、何もしない → 流す、止め → 綱を緩めて前梃子
-    const pull = input.brake ? 0 : input.pull ? 1 : 0.42;
-    this.control = { pull, brake: input.brake ? 1 : 0, steer: Math.max(-1, Math.min(1, input.steer)) };
+    let pull = input.brake ? 0 : input.pull ? 1 : 0.42;
+    let brake = input.brake ? 1 : 0;
+    if (this.opts.autoBrake) {
+      // 角の手前で目安の速さを超えたら、曳き手を緩めて前梃子を掛ける
+      const gd = this.guide;
+      if (this.kmh > gd.allowed + 1) {
+        pull = 0;
+        brake = 1;
+      } else if (this.kmh > gd.allowed - 1.5) pull = Math.min(pull, 0.42);
+    }
+    const helper = (this.opts.steerAssist ?? 0) * autoSteer(this.course, this.s, d);
+    this.control = { pull, brake, steer: Math.max(-1, Math.min(1, input.steer + helper)) };
 
     // 綱の先頭は、通りに沿って地車の少し先を走る
     const look = 7 + Math.max(0, d.vf) * 0.35;
@@ -268,7 +290,7 @@ export class Game {
     }
     if (worst > 0.6) {
       const soft = padded ? 0.5 : 1;
-      this.damage += worst * worst * 0.95 * soft;
+      this.damage += worst * worst * 0.95 * soft * (this.opts.damageScale ?? 1);
       this.rider.jolt(-d.aRight * 0.02 + (this.rng() - 0.5) * worst * 0.5, -worst * 0.35 * soft);
       const penalty = hitPenalty(worst, worstKind, padded);
       this.book.add('hit', penalty);

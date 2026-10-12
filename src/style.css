@@ -354,6 +354,41 @@ body {
   line-height: 1;
 }
 
+#h-speed.ok {
+  color: #7fe08a;
+}
+
+#h-speed.fast {
+  color: #ffd25a;
+}
+
+#h-speed.over {
+  color: var(--warn);
+}
+
+#h-target {
+  display: block;
+  font-style: normal;
+  font-size: 11px;
+  color: var(--ink-dim);
+  min-height: 1em;
+}
+
+#callout.cue {
+  font-size: 26px;
+  animation: blink 0.25s infinite alternate;
+}
+
+#callout.cue.back {
+  background: rgba(40, 110, 200, 0.85);
+}
+
+.pad button.cue {
+  border-color: #fff;
+  box-shadow: 0 0 0 3px var(--kin), 0 0 18px var(--kin);
+  animation: blink 0.25s infinite alternate;
+}
+
 .speed small {
   margin-left: 4px;
   color: var(--ink-dim);
@@ -618,17 +653,41 @@ summary {
   line-height: 1.7;
 }
 
-.assist {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px 16px;
-  align-items: center;
+.difficulty {
+  border: 1px solid rgba(226, 182, 90, 0.4);
+  border-radius: 10px;
   margin: 14px 0;
+  padding: 8px 12px 10px;
+  display: grid;
+  gap: 6px;
   font-size: 14px;
 }
 
-.assist span {
+.difficulty legend {
   color: var(--kin);
+  padding: 0 6px;
+}
+
+.difficulty label {
+  display: grid;
+  grid-template-columns: auto auto 1fr;
+  gap: 8px;
+  align-items: baseline;
+  cursor: pointer;
+}
+
+.difficulty small {
+  color: var(--ink-dim);
+  font-size: 12px;
+}
+
+@media (max-width: 520px) {
+  .difficulty label {
+    grid-template-columns: auto 1fr;
+  }
+  .difficulty small {
+    grid-column: 2;
+  }
 }
 
 button,

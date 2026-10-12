@@ -45,7 +45,7 @@
       <div id="lift">片輪が浮いた！</div>
 
       <div class="hud-bc">
-        <div class="speed"><span id="h-speed">0</span><small>km/h</small></div>
+        <div class="speed"><span id="h-speed">0</span><small>km/h</small><em id="h-target"></em></div>
         <div class="bar-wrap"><span class="k">綱</span><div class="bar"><i id="h-rope"></i></div></div>
         <div class="bar-wrap"><span class="k">梃子</span><div class="teko"><i id="h-teko"></i></div></div>
         <div class="bar-wrap"><span class="k">重心</span><div class="balance"><i id="h-lat"></i><b id="h-lean"></b></div></div>
@@ -84,14 +84,15 @@
           <tr><th>そのほか</th><td>C 視点・M 音・P 一時停止</td></tr>
         </table>
         <p class="tip">
+          こつ: 角が近づくと上に「団扇！」が出て、振る向きのボタンが光ります。角を過ぎたら「戻せ！」で逆へ振って回りすぎを止めます。速さの数字が赤なら速すぎです。<br />
           加点: 角の速さ・無傷・家すれすれの「際」・角での跳び・片輪返し・連続の倍率・タイム。減点: 接触・ドスン・体勢の崩れ・止まりかけ。スマホは横持ちがおすすめです。
         </p>
-        <div class="assist">
-          <span>体重移動の手助け</span>
-          <label><input type="radio" name="assist" value="0.75" checked /> しっかり</label>
-          <label><input type="radio" name="assist" value="0.4" /> 少し</label>
-          <label><input type="radio" name="assist" value="0" /> なし（本職）</label>
-        </div>
+        <fieldset class="difficulty">
+          <legend>難易度</legend>
+          <label><input type="radio" name="difficulty" value="easy" /> <b>やさしい</b><small>曳けを押すだけでも宮入りできる。体重移動は全自動、団扇と減速を手伝う</small></label>
+          <label><input type="radio" name="difficulty" value="normal" checked /> <b>ふつう</b><small>団扇と速さは自分で。体重移動は 75% 自動</small></label>
+          <label><input type="radio" name="difficulty" value="pro" /> <b>本職</b><small>手助けなし</small></label>
+        </fieldset>
         <button id="start" class="go" disabled>読み込み中…</button>
         <p class="note">音が出ます。モデルは Blender で、鳴物はブラウザ内で作っています。</p>
       </div>
