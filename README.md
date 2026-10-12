@@ -1,5 +1,9 @@
 # だんじり 大工方（Blender版）
 
+![木造の地車の屋根から大工方が団扇で合図し、曳き手が町家の角を回り込む宣伝イラスト](promo/github-cover.jpg)
+
+カバー画像はCodexの内蔵画像生成機能で制作したAI生成イラストです。
+
 地車（だんじり）の大屋根に立つ大工方（だいくがた）になって、団扇の合図で曳き手と梃子方を動かし、町の角で「やりまわし」を決める3Dブラウザゲームです。地車・人・町並みは Blender の Python スクリプトで作っています。
 
 公開URL: https://content-production-lab.github.io/danjiri-daikukata-blender/
