@@ -50,7 +50,7 @@ describe('難易度', () => {
   it('ふつうでも、手がかりどおりに曳けば宮入りできる', () => {
     const g = play('normal', followGuide);
     expect(g.ended).toBe('goal');
-    expect(g.results.every((r) => r.hits === 0)).toBe(true);
+    expect(g.results.filter((r) => r.hits > 0).map((r) => r.name)).toEqual([]);
   });
 
   it('ふつうで曳けを押し続けるだけでは家に突っ込む', () => {

@@ -60,6 +60,10 @@ export interface GameOptions {
   autoBrake?: boolean;
   /** 傷みの倍率 */
   damageScale?: number;
+  /** この距離から新しい採点・時間で始める（練習から本編への切替用） */
+  startAt?: number;
+  /** かんたん操作の直線での速度上限 [km/h] */
+  cruiseKmh?: number;
   course?: CourseDef;
 }
 
@@ -112,11 +116,16 @@ export class Game {
   constructor(opts: GameOptions) {
     this.opts = opts;
     this.course = new Course(opts.course ?? MAIN_COURSE);
-    const p = this.course.pointAt(4);
+    const start = opts.startAt ?? 4;
+    const p = this.course.pointAt(start);
     this.danjiri.x = p.x;
     this.danjiri.y = p.y;
     this.danjiri.theta = Math.atan2(p.uy, p.ux);
-    this.s = 4;
+    this.s = start;
+    this.seg = p.seg;
+    this.nextCorner = this.course.corners.findIndex((c) => c.s > start);
+    if (this.nextCorner < 0) this.nextCorner = this.course.corners.length;
+    this.ropeTarget = this.course.ropeLineAt(start + 7);
   }
 
   get kmh(): number {
@@ -128,7 +137,11 @@ export class Game {
   }
 
   get rank(): Rank {
-    return overallRank(this.score, this.ended === 'goal');
+    return overallRank(this.score, this.ended === 'goal', this.totalCorners);
+  }
+
+  get totalCorners(): number {
+    return this.course.corners.filter((c) => c.s > (this.opts.startAt ?? 4)).length;
   }
 
   get upcomingCorner(): Corner | null {
@@ -137,7 +150,7 @@ export class Game {
 
   /** 角の手前の手がかり（合図のタイミング・目安の速さ） */
   get guide(): Guide {
-    return guideFor(this.upcomingCorner, this.s, this.danjiri);
+    return guideFor(this.upcomingCorner, this.s, this.danjiri, this.course);
   }
 
   /** 実時間 dt ぶん進める（内部は固定刻み） */
@@ -165,10 +178,11 @@ export class Game {
     if (this.opts.autoBrake) {
       // 角の手前で目安の速さを超えたら、曳き手を緩めて前梃子を掛ける
       const gd = this.guide;
-      if (this.kmh > gd.allowed + 1) {
+      const allowed = Math.min(gd.allowed, this.opts.cruiseKmh ?? Infinity);
+      if (this.kmh > allowed + 1) {
         pull = 0;
         brake = 1;
-      } else if (this.kmh > gd.allowed - 1.5) pull = Math.min(pull, 0.42);
+      } else if (this.kmh >= allowed - (this.opts.cruiseKmh === undefined ? 1.5 : 1)) pull = Math.min(pull, 0.42);
     }
     const helper = (this.opts.steerAssist ?? 0) * autoSteer(this.course, this.s, d);
     this.control = { pull, brake, steer: Math.max(-1, Math.min(1, input.steer + helper)) };
@@ -357,7 +371,7 @@ export class Game {
     if (this.ended) return;
     this.ended = reason;
     if (reason === 'goal') {
-      this.book.add('time', timeBonus(this.time));
+      this.book.add('time', timeBonus(this.time, this.course.total - (this.opts.startAt ?? 0)));
       this.book.add('safe', safeBonus(this.damage));
     }
     this.events.push({ type: 'end', reason });

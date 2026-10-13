@@ -56,12 +56,12 @@ export interface Guide {
   speed: 'ok' | 'fast' | 'over' | 'free';
 }
 
-export function guideFor(corner: Corner | null, s: number, d: DanjiriSim): Guide {
+export function guideFor(corner: Corner | null, s: number, d: DanjiriSim, course?: Course): Guide {
   if (!corner) return { corner: null, dist: Infinity, allowed: Infinity, cue: 'none', speed: 'free' };
   const dist = corner.s - s;
   const allowed = allowedKmh(dist);
   const cueAt = cueDistance(d.vf);
-  const cue: Cue =
+  let cue: Cue =
     dist <= cueAt && dist > CUE_END
       ? 'now'
       : dist <= BACK_START && dist > BACK_END
@@ -69,6 +69,11 @@ export function guideFor(corner: Corner | null, s: number, d: DanjiriSim): Guide
         : dist > cueAt && dist <= cueAt + 12
           ? 'soon'
           : 'none';
+  if (course && dist <= cueAt && dist > -14) {
+    // 長いコースでもずれが積み上がらないよう、向き・回転速度を合図へ反映。
+    const correction = autoSteer(course, s, d) * corner.dir;
+    cue = correction > 0.18 ? 'now' : correction < -0.18 ? 'back' : 'none';
+  }
   const kmh = d.vf * 3.6;
   const speed = dist > 35 || dist < -4 ? 'free' : kmh <= allowed + 1 ? 'ok' : kmh <= allowed + 5 ? 'fast' : 'over';
   return { corner, dist, allowed, cue, speed };

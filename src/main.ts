@@ -9,6 +9,7 @@ import * as TX from './render/textures';
 import { Hayashi } from './audio';
 import { Input, type Action } from './input';
 import { formatTime, xIntentUrl } from './share';
+import { PlaySession, CONTROL_NAMES, type ControlMode, type Lesson } from './sim/session';
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
 const isTouch = matchMedia('(pointer: coarse)').matches || 'ontouchstart' in window;
@@ -49,6 +50,15 @@ scene.add(camera);
 let models: Models | null = null;
 let world: World | null = null;
 let game: Game | null = null;
+let session: PlaySession | null = null;
+let operation: ControlMode = isTouch ? 'simple' : 'manual';
+const OPERATION_KEY = 'danjiri-daikukata:operation';
+try {
+  const saved = localStorage.getItem(OPERATION_KEY);
+  if (saved === 'simple' || saved === 'manual') operation = saved;
+} catch {
+  // 保存できない場合は端末に合う方式を使う。
+}
 let paused = false;
 let thirdPerson = false;
 let wheelTurn = 0;
@@ -174,6 +184,13 @@ function assemble(m: Models, g: Game) {
   ropeMesh.castShadow = !lowSpec;
   ropeMesh.frustumCulled = false;
   scene.add(ropeMesh);
+}
+
+function selectWorld(g: Game) {
+  if (!models || world?.course.def === g.course.def) return;
+  world?.dispose();
+  world = buildWorld(g.course, models, lowSpec);
+  scene.add(world.group);
 }
 
 // ---------- 毎フレームの同期 ----------
@@ -352,7 +369,8 @@ const balanceEl = el.lat.parentElement as HTMLElement;
 const minimap = $<HTMLCanvasElement>('minimap');
 const mm = minimap.getContext('2d')!;
 let popupTimer = 0;
-const controlButtons = [...document.querySelectorAll<HTMLButtonElement>('#controls button')];
+const controlButtons = [...document.querySelectorAll<HTMLButtonElement>('#controls button[data-a]')];
+const runToggle = $<HTMLButtonElement>('run-toggle');
 
 function popup(big: string, sub = '', bad = false, dur = 2.2) {
   el.popup.innerHTML = '';
@@ -385,8 +403,8 @@ function updateHud(dt: number) {
   if (!game) return;
   const g = game;
   const d = g.danjiri;
-  el.time.textContent = g.time.toFixed(1);
-  el.score.textContent = g.score.toLocaleString('ja-JP');
+  el.time.textContent = session?.training ? '練習' : g.time.toFixed(1);
+  el.score.textContent = session?.training ? '—' : g.score.toLocaleString('ja-JP');
   el.streak.textContent = g.streak > 1 ? `${g.streak}（×${Math.min(1.5, 1 + 0.1 * g.streak).toFixed(1)}）` : String(g.streak);
   el.damage.style.width = `${Math.min(100, g.damage)}%`;
   el.speed.textContent = Math.max(0, g.kmh).toFixed(0);
@@ -447,6 +465,36 @@ function updateControls() {
     b.classList.toggle('on', input.isActive(a));
     b.classList.toggle('cue', a === cueBtn);
   }
+  runToggle.textContent = input.running ? '停止' : '発進 / 再開';
+  runToggle.setAttribute('aria-pressed', String(input.running));
+  runToggle.classList.toggle('on', input.running);
+  updateTutorial();
+}
+
+function updateTutorial() {
+  const training = !!(session?.training && !paused && $('title').hidden && $('result').hidden);
+  $('tutorial').hidden = !training;
+  document.body.classList.toggle('training', training);
+  if (!training || !session) return;
+  const simple = operation === 'simple';
+  const lessons: Record<Exclude<Lesson, 'main'>, [string, string]> = {
+    start: ['1 / 4　発進しよう', simple ? '「発進 / 再開」を1回タップ。指を離しても進みます。' : '「曳け」を押して発進。PCなら W / ↑ です。'],
+    stop: ['1 / 4　停止しよう', simple ? '少し進んだら「停止」を1回タップ。速度が0になるまで待ちます。' : '少し進んだら「止め」（S / ↓）を押して停止します。'],
+    resume: ['2 / 4　もう一度発進', simple ? '「発進 / 再開」をタップ。次は右の角を練習します。' : 'もう一度「曳け」（W / ↑）で発進。次は右の角です。'],
+    right: ['3 / 4　右の角を曲がろう', '光る団扇を押し、合図が消えたら離します。「戻せ」では反対側を押します。速さと重心は練習中は自動補助です。'],
+    left: ['4 / 4　左の角を曲がろう', '今度は左です。光る団扇を押し、合図が消えたら離します。「戻せ」では反対側を押します。'],
+    ready: ['練習おわり！', '通常ステージは760m・7角の別コースです。このまま始めるか、タイトルへ戻れます。'],
+    failed: ['ここでもう一度練習', '練習中の失敗は本編の得点に残りません。最初から練習し直せます。'],
+  };
+  if (session.lesson === 'main') return;
+  const [title, text] = lessons[session.lesson];
+  const wait = session.waitingSteer;
+  const message = wait ? `${wait > 0 ? '右' : '左'}の団扇を押すまで進行を止めています。押したら合図に合わせて離しましょう。` : text;
+  // aria-liveに同じ文を毎フレーム投入しない。
+  if ($('tutorial-title').textContent !== title) $('tutorial-title').textContent = title;
+  if ($('tutorial-text').textContent !== message) $('tutorial-text').textContent = message;
+  $('tutorial-next').hidden = session.lesson !== 'ready';
+  $('tutorial-retry').hidden = session.lesson !== 'failed';
 }
 
 let mmBounds: { minX: number; minY: number; scale: number } | null = null;
@@ -570,7 +618,7 @@ function showResult(reason: EndReason) {
   const g = game;
   const rank = g.rank;
   const [title, text] = REASON[reason];
-  $('r-kicker').textContent = `${reason === 'goal' ? '宮入り' : '結果'} ・ 難易度「${difficulty.name}」`;
+  $('r-kicker').textContent = `${reason === 'goal' ? '宮入り' : '結果'} ・ ${difficulty.name} ・ ${CONTROL_NAMES[operation]}（本編7角）`;
   const rankEl = $('r-rank');
   rankEl.textContent = rank.letter;
   rankEl.className = `rank ${rank.letter}`;
@@ -602,22 +650,25 @@ function showResult(reason: EndReason) {
   const share = $<HTMLAnchorElement>('share-x');
   share.href = xIntentUrl({
     difficulty: difficulty.name,
+    operation: CONTROL_NAMES[operation],
     time: g.time,
     score: g.score,
     rank,
     failure:
       reason === 'goal'
         ? undefined
-        : { kind: reason, detail: reason === 'fall' ? g.rider.fallReason : '', corners: g.results.length, totalCorners: g.course.corners.length },
+        : { kind: reason, detail: reason === 'fall' ? g.rider.fallReason : '', corners: g.results.length, totalCorners: g.totalCorners },
   });
 
   $('hud').hidden = true;
   $('controls').hidden = true;
+  $('tutorial').hidden = true;
+  input.reset();
   $('result').hidden = false;
 }
 
 // ---------- 画面の切り替え ----------
-function start() {
+function start(tutorial = false) {
   if (!models) return;
   const checked = document.querySelector<HTMLInputElement>('input[name="difficulty"]:checked');
   if (checked && checked.value in DIFFICULTIES) difficulty = DIFFICULTIES[checked.value as DifficultyId];
@@ -626,11 +677,24 @@ function start() {
   } catch {
     // 保存できなくても遊べる
   }
-  game = newGame(difficulty);
+  const selectedMode = document.querySelector<HTMLInputElement>('input[name="operation"]:checked')?.value;
+  if (selectedMode === 'simple' || selectedMode === 'manual') operation = selectedMode;
+  input.setMode(operation);
+  document.body.classList.toggle('simple-controls', operation === 'simple');
+  try {
+    localStorage.setItem(OPERATION_KEY, operation);
+  } catch {
+    // 設定を保存できなくても遊べる。
+  }
+  session = new PlaySession(difficulty, operation, tutorial);
+  game = session.game;
+  selectWorld(game);
   wheelTurn = 0;
   shake = 0;
   mmBounds = null;
   el.scorePop.replaceChildren();
+  el.popup.classList.remove('show');
+  popupTimer = 0;
   $('title').hidden = true;
   $('result').hidden = true;
   $('pause').hidden = true;
@@ -638,33 +702,61 @@ function start() {
   $('controls').hidden = false;
   paused = false;
   audio.start();
-  popup('ソーリャ！', isTouch ? '「曳け」で曳き出す' : 'W / ↑ で曳き出す', false, 2.4);
+  if (!session.training) popup('本編スタート', operation === 'simple' ? '「発進 / 再開」をタップ' : '「曳け」（W / ↑）で発進', false, 2.4);
 }
+
+function changeLesson(retry: boolean) {
+  if (!session || !session.training) return;
+  if (retry) session.retryTutorial();
+  else session.startMain();
+  game = session.game;
+  selectWorld(game);
+  input.reset();
+  wheelTurn = 0;
+  shake = 0;
+  mmBounds = null;
+  el.scorePop.replaceChildren();
+  el.popup.classList.remove('show');
+  updateTutorial();
+}
+$('tutorial-next').addEventListener('click', () => changeLesson(false));
+$('tutorial-retry').addEventListener('click', () => changeLesson(true));
+runToggle.addEventListener('click', () => {
+  if (!game || paused || game.ended || !$('title').hidden || session?.lesson === 'ready') return;
+  input.toggleRun();
+});
 
 function setPaused(p: boolean) {
   if (!game || game.ended || !$('title').hidden) return;
   paused = p;
+  if (p) input.reset();
   $('pause').hidden = !p;
   if (p) audio.pause();
   else audio.resume();
 }
 
-$('start').addEventListener('click', start);
-$('retry').addEventListener('click', start);
+$('start').addEventListener('click', () => start());
+$('start-tutorial').addEventListener('click', () => start(true));
+$('retry').addEventListener('click', () => start());
 $('to-title').addEventListener('click', () => {
+  input.reset();
   $('result').hidden = true;
   $('title').hidden = false;
 });
 $('resume').addEventListener('click', () => setPaused(false));
 $('pause-btn').addEventListener('click', () => setPaused(true));
-$('quit').addEventListener('click', () => {
+function returnToTitle() {
+  input.reset();
   audio.pause();
   paused = false;
   $('pause').hidden = true;
   $('hud').hidden = true;
   $('controls').hidden = true;
+  $('tutorial').hidden = true;
   $('title').hidden = false;
-});
+}
+$('quit').addEventListener('click', returnToTitle);
+$('tutorial-exit').addEventListener('click', returnToTitle);
 const muteBtn = $<HTMLButtonElement>('mute');
 const showMute = () => {
   muteBtn.textContent = audio.muted ? '🔇' : '🔊';
@@ -679,27 +771,32 @@ muteBtn.addEventListener('click', toggleMute);
 input.onToggleMute = toggleMute;
 input.onToggleCamera = () => (thirdPerson = !thirdPerson);
 input.onPause = () => setPaused(!paused);
+input.onDeactivate = () => setPaused(true);
 document.addEventListener('visibilitychange', () => {
-  if (document.hidden) audio.pause();
+  if (document.hidden) {
+    input.reset();
+    setPaused(true);
+    audio.pause();
+  }
   else if (game && !game.ended && !paused && $('title').hidden) audio.resume();
 });
 
 // 画面端のボタン（タッチ・マウス。マルチタッチ可）
 for (const b of controlButtons) {
   const a = b.dataset.a as Action;
-  const set = (on: boolean) => input.setButton(a, on);
   b.addEventListener('pointerdown', (e) => {
     e.preventDefault();
-    set(true);
+    if (paused || !game || game.ended || !$('title').hidden) return;
+    input.pressPointer(e.pointerId, a);
     try {
       b.setPointerCapture(e.pointerId);
     } catch {
       // 取り込めなくても押下は効かせる
     }
   });
-  b.addEventListener('pointerup', () => set(false));
-  b.addEventListener('pointercancel', () => set(false));
-  b.addEventListener('lostpointercapture', () => set(false));
+  b.addEventListener('pointerup', (e) => input.releasePointer(e.pointerId));
+  b.addEventListener('pointercancel', (e) => input.releasePointer(e.pointerId));
+  b.addEventListener('lostpointercapture', (e) => input.releasePointer(e.pointerId));
   b.addEventListener('contextmenu', (e) => e.preventDefault());
 }
 
@@ -716,6 +813,17 @@ window.addEventListener('resize', resize);
 resize();
 
 const startBtn = $<HTMLButtonElement>('start');
+const operationRadio = document.querySelector<HTMLInputElement>(`input[name="operation"][value="${operation}"]`);
+if (operationRadio) operationRadio.checked = true;
+function updateOperationHint() {
+  const simple = document.querySelector<HTMLInputElement>('input[name="operation"]:checked')?.value === 'simple';
+  document.body.classList.toggle('simple-controls', simple);
+  $('operation-tip').textContent = simple
+    ? 'どの難易度でも速さ・重心を自動補助します。難易度は団扇の補助と傷みに影響します。跳ぶ操作は使いません。'
+    : '手動操作では難易度ごとの補助を使います。練習中だけは速さ・重心を自動補助します。';
+}
+for (const radio of document.querySelectorAll<HTMLInputElement>('input[name="operation"]')) radio.addEventListener('change', updateOperationHint);
+updateOperationHint();
 const savedRadio = document.querySelector<HTMLInputElement>(`input[name="difficulty"][value="${difficulty.id}"]`);
 if (savedRadio) savedRadio.checked = true;
 loadModels(lowSpec, (r) => (startBtn.textContent = `読み込み中… ${Math.round(r * 100)}%`))
@@ -726,7 +834,8 @@ loadModels(lowSpec, (r) => (startBtn.textContent = `読み込み中… ${Math.ro
     assemble(m, game);
     syncScene(0);
     startBtn.disabled = false;
-    startBtn.textContent = 'スタート';
+    startBtn.textContent = '通常ステージ';
+    $<HTMLButtonElement>('start-tutorial').disabled = false;
   })
   .catch((err: unknown) => {
     console.error(err);
@@ -742,14 +851,11 @@ function frame() {
 function advance(dt: number) {
   const playing = game && models && !paused && $('title').hidden && $('result').hidden;
   const inp = input.read(dt);
-  if (game && playing && !game.ended) {
-    game.update(dt, inp);
-    handleEvents(game.drainEvents());
+  if (game && session && playing) {
+    handleEvents(session.update(dt, inp));
+    game = session.game;
     audio.speedKmh = game.kmh;
     audio.slip = game.danjiri.slip;
-  } else if (game && playing) {
-    game.update(dt, inp);
-    handleEvents(game.drainEvents());
   } else {
     audio.speedKmh = 0;
   }
@@ -791,6 +897,7 @@ if (import.meta.env.DEV) {
       for (let t = 0; t < sec; t += 1 / 60) advance(1 / 60);
     },
     game: () => game,
+    session: () => session,
     audioState: () => audio.state,
     scene,
     info: () => ({ calls: renderer.info.render.calls, tris: renderer.info.render.triangles }),

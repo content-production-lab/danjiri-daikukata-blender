@@ -25,7 +25,7 @@ describe('Course', () => {
   });
 
   it('角の向きを正しく判定する（右折 = +1）', () => {
-    expect(c.corners.map((x) => x.dir)).toEqual([1, -1, -1, 1, 1]);
+    expect(c.corners.map((x) => x.dir)).toEqual([1, -1, -1, 1, 1, -1, 1]);
   });
 
   it('角をまたいでも射影の進みが連続する', () => {

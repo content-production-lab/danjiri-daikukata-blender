@@ -22,6 +22,7 @@ export interface ShareResult {
   failure?: Failure;
   /** 難易度の名前（例: やさしい） */
   difficulty?: string;
+  operation?: string;
 }
 
 const FAILURE_WORD: Record<Failure['kind'], string> = {
@@ -40,7 +41,8 @@ export function formatTime(sec: number): string {
 export function shareText(o: ShareResult): string {
   const score = o.score.toLocaleString('ja-JP');
   const rank = `総合ランク ${o.rank.letter}「${o.rank.name}」`;
-  const game = `だんじり大工方${o.difficulty ? `（${o.difficulty}）` : ''}`;
+  const settings = [o.difficulty, o.operation].filter(Boolean).join('・');
+  const game = `だんじり大工方${settings ? `（${settings}）` : ''}`;
   if (!o.failure) {
     return [`${game}で宮入り！`, `タイム ${formatTime(o.time)}／スコア ${score}`, rank, `#${HASHTAG}`].join('\n');
   }

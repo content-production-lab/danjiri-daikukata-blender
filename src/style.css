@@ -454,6 +454,48 @@ body {
   height: 56px;
 }
 
+.simple-run { display: none; }
+body.simple-controls .pad.left { width: min(58vw, 360px); }
+body.simple-controls .pad.left button { height: 68px; }
+body.simple-controls .pad.left .pull,
+body.simple-controls .pad.left [data-a="brake"],
+body.simple-controls .pad.right { display: none; }
+body.simple-controls .simple-run { display: grid; grid-template-columns: 1fr; width: min(28vw, 180px); }
+body.simple-controls .simple-run button { height: 68px; }
+body.simple-controls .hud-bc { top: 12px; bottom: auto; width: 220px; min-width: 0; padding: 6px 10px; }
+body.simple-controls #minimap { width: 104px; height: 104px; }
+body.simple-controls #callout { top: auto; bottom: calc(98px + var(--safe-b)); }
+body.simple-controls .keys { display: none; }
+
+#tutorial {
+  position: fixed;
+  z-index: 5;
+  left: 50%;
+  bottom: calc(155px + var(--safe-b));
+  transform: translateX(-50%);
+  width: min(440px, calc(100vw - 24px));
+  padding: 12px 16px;
+  border: 1px solid var(--kin);
+  border-radius: 12px;
+  background: rgba(14, 22, 44, 0.96);
+  pointer-events: auto;
+}
+#tutorial strong { color: var(--kin); }
+#tutorial p { margin: 6px 0 10px; font: 14px/1.55 var(--sans); }
+#tutorial .row { gap: 8px; }
+#tutorial button {
+  min-height: 36px;
+  padding: 6px 10px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: #14213f;
+  color: var(--ink);
+  font: 13px var(--sans);
+  touch-action: manipulation;
+}
+body.training #callout, body.training #popup, body.training #score-pop { visibility: hidden; }
+body.simple-controls #tutorial { bottom: calc(96px + var(--safe-b)); }
+
 /* タッチ端末: ボタンを大きく、キーの案内は隠す */
 body.touch {
   --pad-w: min(40vw, 230px);
@@ -514,6 +556,8 @@ body.touch #score-pop {
 
 /* 縦持ちのスマホ */
 @media (orientation: portrait) {
+  body.simple-controls .hud-bc { top: 172px; left: 12px; transform: none; }
+  body.simple-controls .hud-tl { min-width: 130px; }
   body.touch .hud-bc {
     top: 172px;
     left: 12px;

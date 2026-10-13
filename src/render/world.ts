@@ -14,9 +14,11 @@ const HOUSE_H = 7;
 const HOUSE_D = 11;
 
 export interface World {
+  course: Course;
   group: THREE.Group;
   spectators: PoseCrowd;
   spectatorSpots: { x: number; z: number; yaw: number; s: number; scale: number }[];
+  dispose(): void;
 }
 
 const Y = new THREE.Vector3(0, 1, 0);
@@ -245,5 +247,35 @@ export function buildWorld(course: Course, models: Models, lowSpec: boolean): Wo
   shrine.rotation.y = yaw;
   group.add(torii, shrine);
 
-  return { group, spectators, spectatorSpots: spots };
+  // コースを切り替えても、Blender部品の共有ジオメトリ・材質は破棄しない。
+  const sharedGeometry = new Set([
+    ...Object.values(models.town).flat(), ...models.poses.flat(), ...models.stand, ...models.standLo,
+  ].map((part) => part.geometry));
+  for (const model of [models.torii, models.shrine]) model.traverse((obj) => {
+    if (obj instanceof THREE.Mesh) sharedGeometry.add(obj.geometry);
+  });
+  const sharedMaterials = new Set(Object.values(models.materials));
+  let disposed = false;
+  return {
+    course, group, spectators, spectatorSpots: spots,
+    dispose() {
+      if (disposed) return;
+      disposed = true;
+      group.removeFromParent();
+      const geometry = new Set<THREE.BufferGeometry>();
+      const materials = new Set<THREE.Material>();
+      group.traverse((obj) => {
+        if (!(obj instanceof THREE.Mesh || obj instanceof THREE.LineSegments)) return;
+        if (!sharedGeometry.has(obj.geometry)) geometry.add(obj.geometry);
+        for (const mat of Array.isArray(obj.material) ? obj.material : [obj.material]) {
+          if (!sharedMaterials.has(mat)) materials.add(mat);
+        }
+        if (obj instanceof THREE.InstancedMesh) obj.dispose();
+      });
+      geometry.forEach((g) => g.dispose());
+      materials.forEach((m) => m.dispose());
+      ground.material.map?.dispose();
+      group.clear();
+    },
+  };
 }

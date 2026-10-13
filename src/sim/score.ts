@@ -117,7 +117,7 @@ export function hitPenalty(speed: number, kind: 'wall' | 'pole', padded: boolean
 export const slamPenalty = (strength: number) => -Math.round(strength * 60);
 
 /** 宮入りのタイム・無事ボーナス */
-export const timeBonus = (sec: number) => Math.max(0, Math.round((150 - sec) * 20));
+export const timeBonus = (sec: number, distance = 650) => Math.max(0, Math.round((150 * distance / 650 - sec) * 20));
 export const safeBonus = (damage: number) => Math.max(0, Math.round((100 - damage) * 5));
 
 export interface Rank {
@@ -133,9 +133,9 @@ export const RANK_THRESHOLDS: [number, Rank][] = [
   [4800, { letter: 'C', name: 'まだまだ' }],
 ];
 
-export function overallRank(total: number, cleared: boolean): Rank {
+export function overallRank(total: number, cleared: boolean, cornerCount = 5): Rank {
   if (!cleared) return { letter: 'D', name: '出直し' };
-  for (const [min, r] of RANK_THRESHOLDS) if (total >= min) return r;
+  for (const [min, r] of RANK_THRESHOLDS) if (total >= Math.round(min * cornerCount / 5)) return r;
   return { letter: 'D', name: '出直し' };
 }
 

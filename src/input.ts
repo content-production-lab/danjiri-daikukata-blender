@@ -1,6 +1,7 @@
 // キーボード・ゲームパッド・タッチ（画面端のボタン）の入力をまとめる。
 
 import type { PlayerInput } from './sim/game';
+import type { ControlMode } from './sim/session';
 
 export type Action = 'steerL' | 'steerR' | 'pull' | 'brake' | 'leanL' | 'leanR' | 'jump';
 
@@ -23,7 +24,9 @@ const approach = (v: number, target: number, rate: number, dt: number) => {
 export class Input {
   private keys = new Set<string>();
   /** 画面のボタン（タッチ・マウス）で押されている動作 */
-  private buttons = new Set<Action>();
+  private pointers = new Map<number, Action>();
+  private mode: ControlMode = 'manual';
+  running = false;
   private jumpQueued = false;
   private jumpHeldUntil = 0;
   private steer = 0;
@@ -33,6 +36,7 @@ export class Input {
   onToggleCamera: () => void = () => {};
   onToggleMute: () => void = () => {};
   onPause: () => void = () => {};
+  onDeactivate: () => void = () => {};
 
   constructor() {
     window.addEventListener('keydown', (e) => {
@@ -40,6 +44,10 @@ export class Input {
       if (nav && !(e.target instanceof HTMLButtonElement && e.code === 'Space')) e.preventDefault();
       if (e.repeat) return;
       this.keys.add(e.code);
+      if (this.mode === 'simple') {
+        if (KEYS.pull.includes(e.code)) this.running = true;
+        if (KEYS.brake.includes(e.code)) this.running = false;
+      }
       if (e.code === 'Space') this.queueJump();
       if (e.code === 'KeyC') this.onToggleCamera();
       if (e.code === 'KeyM') this.onToggleMute();
@@ -47,21 +55,44 @@ export class Input {
     });
     window.addEventListener('keyup', (e) => this.keys.delete(e.code));
     window.addEventListener('blur', () => {
-      this.keys.clear();
-      this.buttons.clear();
+      this.reset();
+      this.onDeactivate();
     });
   }
 
-  setButton(a: Action, on: boolean): void {
-    if (a === 'jump') {
-      if (on) this.queueJump();
-      return;
-    }
-    if (on) this.buttons.add(a);
-    else this.buttons.delete(a);
+  setMode(mode: ControlMode): void {
+    this.mode = mode;
+    this.reset();
+  }
+
+  reset(): void {
+    this.keys.clear();
+    this.pointers.clear();
+    this.padActive.clear();
+    this.jumpQueued = false;
+    this.jumpHeldUntil = 0;
+    this.padJumpHeld = false;
+    this.steer = 0;
+    this.lean = 0;
+    this.running = false;
+  }
+
+  toggleRun(): void {
+    this.running = !this.running;
+  }
+
+  pressPointer(id: number, a: Action): void {
+    if (this.pointers.has(id)) return;
+    this.pointers.set(id, a);
+    if (a === 'jump') this.queueJump();
+  }
+
+  releasePointer(id: number): void {
+    this.pointers.delete(id);
   }
 
   queueJump(): void {
+    if (this.mode === 'simple') return;
     this.jumpQueued = true;
     this.jumpHeldUntil = performance.now() + 180;
   }
@@ -69,7 +100,12 @@ export class Input {
   /** 今押されている動作（画面端の表示を光らせる） */
   isActive(a: Action): boolean {
     if (a === 'jump') return performance.now() < this.jumpHeldUntil;
-    return this.buttons.has(a) || this.padActive.has(a) || KEYS[a].some((c) => this.keys.has(c));
+    if (this.mode === 'simple') {
+      if (a === 'pull') return this.running;
+      if (a === 'brake') return !this.running;
+      if (a === 'leanL' || a === 'leanR') return false;
+    }
+    return [...this.pointers.values()].includes(a) || this.padActive.has(a) || KEYS[a].some((c) => this.keys.has(c));
   }
 
   read(dt: number): PlayerInput {
@@ -91,8 +127,8 @@ export class Input {
     const leanTarget = (on('leanR') ? 1 : 0) - (on('leanL') ? 1 : 0);
 
     // 団扇の合図は振りはじめてから強まる。体重移動はじわりと掛ける
-    this.steer = analogSteer ?? approach(this.steer, steerTarget, steerTarget === 0 ? 5 : 3.2, dt);
-    this.lean = analogLean ?? approach(this.lean, leanTarget, leanTarget === 0 ? 4 : 2.2, dt);
+    this.steer = this.mode === 'simple' ? steerTarget : analogSteer ?? approach(this.steer, steerTarget, steerTarget === 0 ? 5 : 3.2, dt);
+    this.lean = this.mode === 'simple' ? 0 : analogLean ?? approach(this.lean, leanTarget, leanTarget === 0 ? 4 : 2.2, dt);
 
     const jump = this.jumpQueued;
     this.jumpQueued = false;
